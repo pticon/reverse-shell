@@ -8,6 +8,7 @@
 
 
 #define PROGNAME	"reverse-shell"
+#define VERSION		"1.0.0"
 #define SHELL		"sh"
 #define PATH		"/bin"
 #define PATHSHELL	PATH "/" SHELL
@@ -31,9 +32,16 @@ static void usage()
 	fprintf(stderr, "usage: %s [options] <host> <port>\n", PROGNAME);
 	fprintf(stderr, "options:\n");
 	fprintf(stderr, "\t-h         : display this and exit\n");
+	fprintf(stderr, "\t-v         : display version and exit\n");
 	fprintf(stderr, "\t-f         : foreground mode (eg: no fork)\n");
 	fprintf(stderr, "\t-6         : use IPv6 socket\n");
 	fprintf(stderr, "\t-s <shell> : give the path shell (default: %s)\n", PATHSHELL);
+}
+
+
+static void version()
+{
+	fprintf(stderr, "%s %s\n", PROGNAME, VERSION);
 }
 
 
@@ -122,25 +130,29 @@ int main(int argc, char *argv[])
 
 	rshell_init(&rshell);
 
-	while ( (c = getopt(argc, argv, "hf6s:")) != -1 )
+	while ( (c = getopt(argc, argv, "6fhs:v")) != -1 )
 	{
 		switch ( c )
 		{
-			case 'h':
-			usage();
-			return 0;
+			case '6':
+			rshell.family = AF_INET6;
+			break;
 
 			case 'f':
 			rshell.flags |= RSHELL_F_NOFORK;
 			break;
 
-			case '6':
-			rshell.family = AF_INET6;
-			break;
+			case 'h':
+			usage();
+			return 0;
 
 			case 's':
 			rshell.shell = optarg;
 			break;
+
+			case 'v':
+			version();
+			return 0;
 		}
 	}
 
