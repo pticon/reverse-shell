@@ -8,6 +8,7 @@ A simple reverse shell
 usage: reverse-shell [options] <host> <port>
 options:
 	-h         : display this and exit
+	-v         : display version and exit
 	-f         : foreground mode (eg: no fork)
 	-6         : use IPv6 socket
 	-s <shell> : give the path shell (default: /bin/sh)
