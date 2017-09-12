@@ -1,4 +1,4 @@
-TARGET=reverse-shell
+TARGET=reverse-shell reverse-listener
 
 
 CC:=gcc
@@ -23,7 +23,8 @@ echo-cmd = @echo $(1)
 endif
 
 
-SRCS:=main.c
+SRCS:=reverse-shell.c
+SRCS+=reverse-listener.c
 
 OBJS:=$(SRCS:%.c=%.o)
 
@@ -31,7 +32,12 @@ OBJS:=$(SRCS:%.c=%.o)
 all: $(TARGET)
 
 
-$(TARGET): $(OBJS)
+reverse-shell: reverse-shell.o
+	$(call echo-cmd, "  LD   $@")
+	$(Q)$(LD) $(LDFLAGS) -o $@ $^
+
+
+reverse-listener: reverse-listener.o
 	$(call echo-cmd, "  LD   $@")
 	$(Q)$(LD) $(LDFLAGS) -o $@ $^
 

