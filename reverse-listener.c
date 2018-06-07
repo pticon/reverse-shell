@@ -10,6 +10,7 @@
 
 #define PROGNAME	"reverse-listener"
 #define LISTEN_BACKLOG	1
+#define CMD_BUFFER_LEN	4096
 #define _STR(a)		#a
 #define STR(a)		_STR(a)
 
@@ -68,7 +69,7 @@ static int command(int fd)
 {
 	size_t	len;
 	int	llen;
-	char	buf[4096];
+	char	buf[CMD_BUFFER_LEN];
 
 	display_tip();
 
