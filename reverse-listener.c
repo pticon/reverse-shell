@@ -111,7 +111,8 @@ static void serve(const struct listener *listener)
 	int			sockfd,
 				client,
 				opt = 1;
-	struct sockaddr		saddr;
+	struct sockaddr_storage	saddr;
+	struct sockaddr		*psaddr = (struct sockaddr *) &saddr;
 	struct sockaddr_in	*sin4,
 				peeraddr4;
 	struct sockaddr_in6	*sin6,
@@ -132,12 +133,12 @@ static void serve(const struct listener *listener)
 	}
 
 	memset(&saddr, 0, sizeof(saddr));
-	saddr.sa_family = listener->family;
+	psaddr->sa_family = listener->family;
 
 	switch ( listener->family )
 	{
 			case AF_INET:
-			sin4 = (struct sockaddr_in *)&saddr;
+			sin4 = (struct sockaddr_in *) psaddr;
 			len = sizeof(struct sockaddr_in);
 			sin4->sin_port = htons(listener->port);
 			sin4->sin_addr.s_addr = htonl(INADDR_ANY);
@@ -145,7 +146,7 @@ static void serve(const struct listener *listener)
 			break;
 
 			case AF_INET6:
-			sin6 = (struct sockaddr_in6 *)&saddr;
+			sin6 = (struct sockaddr_in6 *) psaddr;
 			len = sizeof(struct sockaddr_in6);
 			sin6->sin6_port = htons(listener->port);
 			memset(sin6->sin6_addr.s6_addr, 0, 16);
@@ -157,7 +158,7 @@ static void serve(const struct listener *listener)
 			exit(-1);
 	}
 
-	if ( bind(sockfd, &saddr, len) < 0 )
+	if ( bind(sockfd, psaddr, len) < 0 )
 	{
 		perror("bind");
 		exit(errno);
