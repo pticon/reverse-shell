@@ -149,11 +149,10 @@ static void serve(const struct listener *listener)
 				opt = 1;
 	struct sockaddr_storage	saddr;
 	struct sockaddr		*psaddr = (struct sockaddr *) &saddr;
-	struct sockaddr_in	*sin4,
-				peeraddr4;
-	struct sockaddr_in6	*sin6,
-				peeraddr6;
-	struct sockaddr		*peeraddr;
+	struct sockaddr_in	*sin4;
+	struct sockaddr_in6	*sin6;
+	struct sockaddr_storage	storage;
+	struct sockaddr		*peeraddr = (struct sockaddr *) &storage;
 	socklen_t		len;
 
 	if ( (sockfd = socket(listener->family, SOCK_STREAM, 0)) < 0 )
@@ -178,7 +177,6 @@ static void serve(const struct listener *listener)
 			len = sizeof(struct sockaddr_in);
 			sin4->sin_port = htons(listener->port);
 			sin4->sin_addr.s_addr = htonl(INADDR_ANY);
-			peeraddr = (struct sockaddr *) &peeraddr4;
 			break;
 
 			case AF_INET6:
@@ -186,7 +184,6 @@ static void serve(const struct listener *listener)
 			len = sizeof(struct sockaddr_in6);
 			sin6->sin6_port = htons(listener->port);
 			memset(sin6->sin6_addr.s6_addr, 0, 16);
-			peeraddr = (struct sockaddr *) &peeraddr6;
 			break;
 
 			default:
