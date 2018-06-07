@@ -9,6 +9,8 @@
 
 #define PROGNAME	"reverse-listener"
 #define LISTEN_BACKLOG	1
+#define _STR(a)		#a
+#define STR(a)		_STR(a)
 
 #include "common.h"
 
@@ -18,21 +20,24 @@ struct listener
 	char		*service;
 	uint16_t	port;
 	int		family;
+	int		backlog;
 };
 
 static void usage(void)
 {
 	fprintf(stderr, "usage: %s [options] <host> <port>\n", PROGNAME);
 	fprintf(stderr, "options:\n");
-	fprintf(stderr, "\t-h         : display this and exit\n");
-	fprintf(stderr, "\t-v         : display version and exit\n");
-	fprintf(stderr, "\t-6         : use IPv6 socket\n");
+	fprintf(stderr, "\t-b <backlog>: define the maximum length to which the queue of pending connections may grow (default: " STR(LISTEN_BACKLOG) ")\n");
+	fprintf(stderr, "\t-h          : display this and exit\n");
+	fprintf(stderr, "\t-v          : display version and exit\n");
+	fprintf(stderr, "\t-6          : use IPv6 socket\n");
 }
 
 
 static void listener_init(struct listener *listener)
 {
 	listener->family = AF_INET;
+	listener->backlog = LISTEN_BACKLOG;
 }
 
 
@@ -164,7 +169,7 @@ static void serve(const struct listener *listener)
 		exit(errno);
 	}
 
-	if ( listen(sockfd, LISTEN_BACKLOG) < 0 )
+	if ( listen(sockfd, listener->backlog) < 0 )
 	{
 		perror("listen");
 		exit(errno);
@@ -193,12 +198,16 @@ int main(int argc, char *argv[])
 
 	listener_init(&listener);
 
-	while ( (c = getopt(argc, argv, "6hv")) != -1 )
+	while ( (c = getopt(argc, argv, "6b:hv")) != -1 )
 	{
 		switch ( c )
 		{
 			case '6':
 			listener.family = AF_INET6;
+			break;
+
+			case 'b':
+			listener.backlog = atoi(optarg);
 			break;
 
 			case 'h':
