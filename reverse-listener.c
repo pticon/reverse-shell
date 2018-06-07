@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <arpa/inet.h>
 
 #define PROGNAME	"reverse-listener"
 #define LISTEN_BACKLOG	1
@@ -59,7 +60,6 @@ static int listener_set_port(struct listener *listener, char *port)
 
 static void display_tip(void)
 {
-	fprintf(stderr, "\nNew connection !\n");
 	fprintf(stderr, "Type 'quit' to close the connection\n");
 }
 
@@ -108,6 +108,37 @@ static int command(int fd)
 	}
 
 	return 0;
+}
+
+
+static const char *get_ip_str(const struct sockaddr *saddr)
+{
+	static char	buff[sizeof("[fe80:1212:290:1aff:fea3:1f5c]:65535")];
+	char		ip[INET6_ADDRSTRLEN];
+	const char	*ptr;
+	socklen_t	len;
+
+	switch (saddr->sa_family)
+	{
+		case AF_INET:
+		len = sizeof(struct sockaddr_in);
+		break;
+
+		case AF_INET6:
+		len = sizeof(struct sockaddr_in);
+		break;
+
+		default:
+		return "";
+	}
+
+	if ( (ptr = inet_ntop(saddr->sa_family, (const void*) saddr->sa_data + 2, ip, len)) == NULL )
+		return "";
+
+	memset(buff, 0, sizeof(buff));
+	snprintf(buff, sizeof(buff), "[%s]:%d", ptr, ntohs(((const struct sockaddr_in *)saddr)->sin_port));
+
+	return buff;
 }
 
 
@@ -182,6 +213,8 @@ static void serve(const struct listener *listener)
 		perror("accept");
 		exit(errno);
 	}
+
+	fprintf(stderr, "\nNew connection from %s!\n", get_ip_str(peeraddr));
 
 	while ( command(client) )
 		;
