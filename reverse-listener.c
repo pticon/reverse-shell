@@ -23,11 +23,12 @@ struct listener
 	uint16_t	port;
 	int		family;
 	int		backlog;
+	char		*peer;
 };
 
 static void usage(void)
 {
-	fprintf(stderr, "usage: %s [options] <host> <port>\n", PROGNAME);
+	fprintf(stderr, "usage: %s [options] <host> <port> [peer]\n", PROGNAME);
 	fprintf(stderr, "options:\n");
 	fprintf(stderr, "\t-b <backlog>: define the maximum length to which the queue of pending connections may grow (default: " STR(LISTEN_BACKLOG) ")\n");
 	fprintf(stderr, "\t-h          : display this and exit\n");
@@ -41,6 +42,7 @@ static void listener_init(struct listener *listener)
 {
 	listener->family = AF_UNSPEC;
 	listener->backlog = LISTEN_BACKLOG;
+	listener->peer = NULL;
 }
 
 
@@ -113,6 +115,29 @@ static int command(int fd)
 }
 
 
+static int check_peer(const struct listener *listener, const struct sockaddr *peer, socklen_t len)
+{
+	char			host[NI_MAXHOST],
+				service[NI_MAXSERV];
+
+	if ( listener->peer == NULL )
+		return 1;
+
+	if ( getnameinfo(peer, len, host, sizeof(host), service, sizeof(service), NI_NUMERICHOST) != 0 )
+	{
+		perror("getnameinfo");
+		return 0;
+	}
+
+	if ( strcasecmp(host, listener->peer) == 0 )
+		return 1;
+
+	fprintf(stderr, "Peer %s mismatched (not %s).\n", host, listener->peer);
+
+	return 0;
+}
+
+
 static const char *get_ip_str(const struct sockaddr *saddr)
 {
 	static char	buff[sizeof("[fe80:1212:290:1aff:fea3:1f5c]:65535")];
@@ -156,12 +181,14 @@ static int make_socket(const struct listener *listener)
 
 	hints.ai_family = listener->family;
 	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+	//hints.ai_protocol = listener->port;
 	if ( strcasecmp(listener->host, "any") == 0 )
 		hints.ai_flags = AI_PASSIVE;
 
-	if ( getaddrinfo(NULL, listener->host, &hints, &result) != 0 )
+	if ( (s = getaddrinfo(listener->host, listener->service, &hints, &result)) != 0 )
 	{
-		perror("getaddrinfo");
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
 		exit(-1);
 	}
 
@@ -173,6 +200,12 @@ static int make_socket(const struct listener *listener)
 		if ( (s = socket(rp->ai_family, SOCK_STREAM, 0)) < 0 )
 			continue;
 
+		if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &opt, sizeof(opt)) < 0 )
+		{
+			close(s);
+			continue;
+		}
+
 		if ( bind(s, rp->ai_addr, rp->ai_addrlen) == 0 )
 			break;
 
@@ -182,13 +215,11 @@ static int make_socket(const struct listener *listener)
 	freeaddrinfo(result);
 
 	if ( rp == NULL )
-		exit(-1);
-
-	if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &opt, sizeof(opt)) < 0 )
 	{
-			perror("reuseaddr");
-			exit(errno);
+		fprintf(stderr, "Could not bind any socket.\n");
+		exit(-1);
 	}
+
 
 	return s;
 }
@@ -200,7 +231,7 @@ static void serve(const struct listener *listener)
 				client;
 	struct sockaddr_storage	storage;
 	struct sockaddr		*peeraddr = (struct sockaddr *) &storage;
-	socklen_t		len;
+	socklen_t		len = sizeof(struct sockaddr_storage);
 
 	sockfd = make_socket(listener);
 
@@ -212,10 +243,16 @@ static void serve(const struct listener *listener)
 
 	fprintf(stderr, "Waiting for connection...\n");
 
-	if ( (client = accept(sockfd, peeraddr, &len)) < 0 )
+	while ( 1 )
 	{
-		perror("accept");
-		exit(errno);
+		if ( (client = accept(sockfd, peeraddr, &len)) < 0 )
+		{
+			perror("accept");
+			exit(errno);
+		}
+	
+		if ( check_peer(listener, peeraddr, len) )
+			break;
 	}
 
 	fprintf(stderr, "\nNew connection from %s!\n", get_ip_str(peeraddr));
@@ -240,7 +277,7 @@ int main(int argc, char *argv[])
 		switch ( c )
 		{
 			case '4':
-			listener.family = AF_INET6;
+			listener.family = AF_INET;
 			break;
 
 			case '6':
@@ -264,11 +301,14 @@ int main(int argc, char *argv[])
 	argv += optind;
 	argc -= optind;
 
-	if ( argc != 2 )
+	if ( argc < 2 || argc > 3 )
 	{
 		usage();
 		return -1;
 	}
+
+	if ( argc == 3 )
+		listener.peer = argv[2];
 
 	listener.host = argv[0];
 	if ( listener_set_port(&listener, argv[1]) )
