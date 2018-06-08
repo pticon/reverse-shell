@@ -29,6 +29,10 @@ struct listener
 static void usage(void)
 {
 	fprintf(stderr, "usage: %s [options] <host> <port> [peer]\n", PROGNAME);
+	fprintf(stderr, "arguments:\n");
+	fprintf(stderr, "\thost        : mandatory specific host to bind (could be \"any\")\n");
+	fprintf(stderr, "\tport        : mandatory specific port to bind\n");
+	fprintf(stderr, "\tpeer        : optional peer address to accept connetion from\n");
 	fprintf(stderr, "options:\n");
 	fprintf(stderr, "\t-b <backlog>: define the maximum length to which the queue of pending connections may grow (default: " STR(LISTEN_BACKLOG) ")\n");
 	fprintf(stderr, "\t-h          : display this and exit\n");
