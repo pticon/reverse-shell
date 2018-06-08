@@ -34,6 +34,7 @@ static void usage(void)
 	fprintf(stderr, "\t-h         : display this and exit\n");
 	fprintf(stderr, "\t-v         : display version and exit\n");
 	fprintf(stderr, "\t-f         : foreground mode (eg: no fork)\n");
+	fprintf(stderr, "\t-4         : use IPv4 socket\n");
 	fprintf(stderr, "\t-6         : use IPv6 socket\n");
 	fprintf(stderr, "\t-s <shell> : give the path shell (default: %s)\n", PATHSHELL);
 }
@@ -94,7 +95,7 @@ static void reverse_tcp(const struct rshell *rshell)
 
 static void rshell_init(struct rshell *rshell)
 {
-	rshell->family = AF_INET;
+	rshell->family = AF_UNSPEC;
 	rshell->shell = PATHSHELL;
 	rshell->flags = 0;
 }
@@ -124,10 +125,14 @@ int main(int argc, char *argv[])
 
 	rshell_init(&rshell);
 
-	while ( (c = getopt(argc, argv, "6fhs:v")) != -1 )
+	while ( (c = getopt(argc, argv, "46fhs:v")) != -1 )
 	{
 		switch ( c )
 		{
+			case '4':
+			rshell.family = AF_INET;
+			break;
+
 			case '6':
 			rshell.family = AF_INET6;
 			break;
