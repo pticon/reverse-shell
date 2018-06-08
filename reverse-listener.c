@@ -32,13 +32,14 @@ static void usage(void)
 	fprintf(stderr, "\t-b <backlog>: define the maximum length to which the queue of pending connections may grow (default: " STR(LISTEN_BACKLOG) ")\n");
 	fprintf(stderr, "\t-h          : display this and exit\n");
 	fprintf(stderr, "\t-v          : display version and exit\n");
+	fprintf(stderr, "\t-4          : use IPv4 socket\n");
 	fprintf(stderr, "\t-6          : use IPv6 socket\n");
 }
 
 
 static void listener_init(struct listener *listener)
 {
-	listener->family = AF_INET;
+	listener->family = AF_UNSPEC;
 	listener->backlog = LISTEN_BACKLOG;
 }
 
@@ -230,10 +231,14 @@ int main(int argc, char *argv[])
 
 	listener_init(&listener);
 
-	while ( (c = getopt(argc, argv, "6b:hv")) != -1 )
+	while ( (c = getopt(argc, argv, "46b:hv")) != -1 )
 	{
 		switch ( c )
 		{
+			case '4':
+			listener.family = AF_INET6;
+			break;
+
 			case '6':
 			listener.family = AF_INET6;
 			break;
