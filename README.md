@@ -10,6 +10,7 @@ options:
 	-h         : display this and exit
 	-v         : display version and exit
 	-f         : foreground mode (eg: no fork)
+	-4         : use IPv4 socket
 	-6         : use IPv6 socket
 	-s <shell> : give the path shell (default: /bin/sh)
 ```
