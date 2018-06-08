@@ -144,61 +144,65 @@ static const char *get_ip_str(const struct sockaddr *saddr)
 }
 
 
-static void serve(const struct listener *listener)
+static int make_socket(const struct listener *listener)
 {
-	int			sockfd,
-				client,
-				opt = 1;
-	struct sockaddr_storage	saddr;
-	struct sockaddr		*psaddr = (struct sockaddr *) &saddr;
-	struct sockaddr_in	*sin4;
-	struct sockaddr_in6	*sin6;
-	struct sockaddr_storage	storage;
-	struct sockaddr		*peeraddr = (struct sockaddr *) &storage;
-	socklen_t		len;
+	struct addrinfo	hints,
+			*result,
+			*rp;
+	int		s,
+			opt = 1;
 
-	if ( (sockfd = socket(listener->family, SOCK_STREAM, 0)) < 0 )
+	memset(&hints, 0, sizeof(hints));
+
+	hints.ai_family = listener->family;
+	hints.ai_socktype = SOCK_STREAM;
+	if ( strcasecmp(listener->host, "any") == 0 )
+		hints.ai_flags = AI_PASSIVE;
+
+	if ( getaddrinfo(NULL, listener->host, &hints, &result) != 0 )
 	{
-		perror("socket");
-		exit(errno);
+		perror("getaddrinfo");
+		exit(-1);
 	}
 
-	if ( setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (char *) &opt, sizeof(opt)) < 0 )
+	/* getaddrinfo() returns a list of address structures.
+	 * Try each address until we successfully bind().
+	 */
+	for ( rp = result ; rp != NULL ; rp = rp->ai_next )
+	{
+		if ( (s = socket(rp->ai_family, SOCK_STREAM, 0)) < 0 )
+			continue;
+
+		if ( bind(s, rp->ai_addr, rp->ai_addrlen) == 0 )
+			break;
+
+		close(s);
+	}
+
+	freeaddrinfo(result);
+
+	if ( rp == NULL )
+		exit(-1);
+
+	if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &opt, sizeof(opt)) < 0 )
 	{
 			perror("reuseaddr");
 			exit(errno);
 	}
 
-	memset(&saddr, 0, sizeof(saddr));
-	psaddr->sa_family = listener->family;
+	return s;
+}
 
-	switch ( listener->family )
-	{
-			case AF_INET:
-			sin4 = (struct sockaddr_in *) psaddr;
-			len = sizeof(struct sockaddr_in);
-			sin4->sin_port = htons(listener->port);
-			sin4->sin_addr.s_addr = !strcasecmp(listener->host, "any") ?
-				htonl(INADDR_ANY) : inet_addr(listener->host);
-			break;
 
-			case AF_INET6:
-			sin6 = (struct sockaddr_in6 *) psaddr;
-			len = sizeof(struct sockaddr_in6);
-			sin6->sin6_port = htons(listener->port);
-			memset(sin6->sin6_addr.s6_addr, 0, 16);
-			break;
+static void serve(const struct listener *listener)
+{
+	int			sockfd,
+				client;
+	struct sockaddr_storage	storage;
+	struct sockaddr		*peeraddr = (struct sockaddr *) &storage;
+	socklen_t		len;
 
-			default:
-			fprintf(stderr, "Unknown family %d\n", listener->family);
-			exit(-1);
-	}
-
-	if ( bind(sockfd, psaddr, len) < 0 )
-	{
-		perror("bind");
-		exit(errno);
-	}
+	sockfd = make_socket(listener);
 
 	if ( listen(sockfd, listener->backlog) < 0 )
 	{
