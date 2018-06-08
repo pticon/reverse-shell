@@ -32,7 +32,7 @@ static void usage(void)
 	fprintf(stderr, "arguments:\n");
 	fprintf(stderr, "\thost        : mandatory specific host to bind (could be \"any\")\n");
 	fprintf(stderr, "\tport        : mandatory specific port to bind\n");
-	fprintf(stderr, "\tpeer        : optional peer address to accept connetion from\n");
+	fprintf(stderr, "\tpeer        : optional peer address to accept connection from\n");
 	fprintf(stderr, "options:\n");
 	fprintf(stderr, "\t-b <backlog>: define the maximum length to which the queue of pending connections may grow (default: " STR(LISTEN_BACKLOG) ")\n");
 	fprintf(stderr, "\t-h          : display this and exit\n");
@@ -180,17 +180,18 @@ static int make_socket(const struct listener *listener)
 			*rp;
 	int		s,
 			opt = 1;
+	char		*host = listener->host;
 
 	memset(&hints, 0, sizeof(hints));
 
 	hints.ai_family = listener->family;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
-	//hints.ai_protocol = listener->port;
-	if ( strcasecmp(listener->host, "any") == 0 )
-		hints.ai_flags = AI_PASSIVE;
 
-	if ( (s = getaddrinfo(listener->host, listener->service, &hints, &result)) != 0 )
+	if ( strcasecmp(listener->host, "any") == 0 )
+		hints.ai_flags = AI_PASSIVE, host = NULL;
+
+	if ( (s = getaddrinfo(host, listener->service, &hints, &result)) != 0 )
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
 		exit(-1);
