@@ -177,7 +177,8 @@ static void serve(const struct listener *listener)
 			sin4 = (struct sockaddr_in *) psaddr;
 			len = sizeof(struct sockaddr_in);
 			sin4->sin_port = htons(listener->port);
-			sin4->sin_addr.s_addr = htonl(INADDR_ANY);
+			sin4->sin_addr.s_addr = !strcasecmp(listener->host, "any") ?
+				htonl(INADDR_ANY) : inet_addr(listener->host);
 			break;
 
 			case AF_INET6:
