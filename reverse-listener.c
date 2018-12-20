@@ -10,11 +10,13 @@
 
 #define PROGNAME	"reverse-listener"
 #define LISTEN_BACKLOG	1
-#define CMD_BUFFER_LEN	4096
 #define _STR(a)		#a
 #define STR(a)		_STR(a)
 
 #include "common.h"
+#include "plugin.h"
+#include "plain_tcp.h"
+#include "plain_udp.h"
 
 struct listener
 {
@@ -24,7 +26,9 @@ struct listener
 	int		family;
 	int		backlog;
 	char		*peer;
+	struct plugin	*plugin;
 };
+
 
 static void usage(void)
 {
@@ -39,14 +43,16 @@ static void usage(void)
 	fprintf(stderr, "\t-v          : display version and exit\n");
 	fprintf(stderr, "\t-4          : use IPv4 socket\n");
 	fprintf(stderr, "\t-6          : use IPv6 socket\n");
+	fprintf(stderr, "\t-u          : use an UDP socket\n");
 }
 
 
 static void listener_init(struct listener *listener)
 {
-	listener->family = AF_UNSPEC;
-	listener->backlog = LISTEN_BACKLOG;
-	listener->peer = NULL;
+	listener->family	= AF_UNSPEC;
+	listener->backlog	= LISTEN_BACKLOG;
+	listener->peer		= NULL;
+	listener->plugin	= &plain_tcp_plugin;
 }
 
 
@@ -72,11 +78,13 @@ static void display_tip(void)
 }
 
 
-static int command(int fd)
+static int command(const struct plugin * const plugin, int fd,
+		struct sockaddr *destaddr, socklen_t addrlen)
 {
-	size_t	len;
+	ssize_t	len;
 	int	llen;
 	char	buf[CMD_BUFFER_LEN];
+	char	*cmd;
 
 	display_tip();
 
@@ -90,18 +98,24 @@ static int command(int fd)
 			return -1;
 		}
 
-		if ( strcmp(buf, "quit\n") == 0 )
+		len = strnlen(buf, sizeof(buf));
+		cmd = trim(buf, &len);
+
+		if ( ! len )
+			continue;
+
+		if ( strcmp(cmd, "quit") == 0 )
 			return 0;
 
-		len = strnlen(buf, sizeof(buf));
-
-		if ( send(fd, buf, len, MSG_DONTWAIT) != len )
+		if ( plugin->send(fd, cmd, len, MSG_DONTWAIT, destaddr, addrlen) != len )
 		{
 			fprintf(stderr, "write: unable to send\n");
 			return 0;
 		}
 
-		while ( (llen = recv(fd, buf, sizeof(buf), MSG_DONTWAIT)) )
+		llen = sizeof(buf);
+		while ( llen == sizeof(buf) &&
+				(llen = plugin->recv(fd, buf, sizeof(buf), 0, destaddr, &addrlen)) )
 		{
 			if ( llen < 0 )
 			{
@@ -176,84 +190,25 @@ static const char *get_ip_str(const struct sockaddr *saddr)
 }
 
 
-static int make_socket(const struct listener *listener)
-{
-	struct addrinfo	hints,
-			*result,
-			*rp;
-	int		s,
-			opt = 1;
-	char		*host = listener->host;
-
-	memset(&hints, 0, sizeof(hints));
-
-	hints.ai_family = listener->family;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
-
-	if ( strcasecmp(listener->host, "any") == 0 )
-		hints.ai_flags = AI_PASSIVE, host = NULL;
-
-	if ( (s = getaddrinfo(host, listener->service, &hints, &result)) != 0 )
-	{
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-		exit(-1);
-	}
-
-	/* getaddrinfo() returns a list of address structures.
-	 * Try each address until we successfully bind().
-	 */
-	for ( rp = result ; rp != NULL ; rp = rp->ai_next )
-	{
-		if ( (s = socket(rp->ai_family, SOCK_STREAM, 0)) < 0 )
-			continue;
-
-		if ( setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &opt, sizeof(opt)) < 0 )
-		{
-			close(s);
-			continue;
-		}
-
-		if ( bind(s, rp->ai_addr, rp->ai_addrlen) == 0 )
-			break;
-
-		close(s);
-	}
-
-	freeaddrinfo(result);
-
-	if ( rp == NULL )
-	{
-		fprintf(stderr, "Could not bind any socket.\n");
-		exit(-1);
-	}
-
-
-	return s;
-}
-
-
 static void serve(const struct listener *listener)
 {
 	int			sockfd,
 				client;
+	struct addrinfo		hints = {0};
 	struct sockaddr_storage	storage;
 	struct sockaddr		*peeraddr = (struct sockaddr *) &storage;
 	socklen_t		len = sizeof(struct sockaddr_storage);
 
-	sockfd = make_socket(listener);
+	hints.ai_family = listener->family;
 
-	if ( listen(sockfd, listener->backlog) < 0 )
-	{
-		perror("listen");
-		exit(errno);
-	}
+	if ( (sockfd = listener->plugin->listen(&hints, listener->host, listener->service)) < 0 )
+		return;
 
 	fprintf(stderr, "Waiting for connection...\n");
 
 	while ( 1 )
 	{
-		if ( (client = accept(sockfd, peeraddr, &len)) < 0 )
+		if ( (client = listener->plugin->accept(sockfd, peeraddr, &len)) < 0 )
 		{
 			perror("accept");
 			exit(errno);
@@ -265,7 +220,7 @@ static void serve(const struct listener *listener)
 
 	fprintf(stderr, "\nNew connection from %s!\n", get_ip_str(peeraddr));
 
-	while ( command(client) )
+	while ( command(listener->plugin, client, peeraddr, len) )
 		;
 
 	close(client);
@@ -280,7 +235,7 @@ int main(int argc, char *argv[])
 
 	listener_init(&listener);
 
-	while ( (c = getopt(argc, argv, "46b:hv")) != -1 )
+	while ( (c = getopt(argc, argv, "46b:huv")) != -1 )
 	{
 		switch ( c )
 		{
@@ -299,6 +254,10 @@ int main(int argc, char *argv[])
 			case 'h':
 			usage();
 			return 0;
+
+			case 'u':
+			listener.plugin = &plain_udp_plugin;
+			break;
 
 			case 'v':
 			version();

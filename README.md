@@ -1,6 +1,6 @@
 # reverse-shell
 
-A simple reverse shell
+A simple reverse shell over TCP or UDP.
 
 ## Usage
 
@@ -13,6 +13,7 @@ options:
 	-4         : use IPv4 socket
 	-6         : use IPv6 socket
 	-s <shell> : give the path shell (default: /bin/sh)
+	-u         : use an UDP socket
 ```
 
 ## Example
