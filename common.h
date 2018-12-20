@@ -1,7 +1,7 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#define VERSION		"1.1.0-dev"
+#define VERSION		"1.1.0"
 
 
 static inline void version(void)
