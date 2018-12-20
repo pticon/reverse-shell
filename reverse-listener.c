@@ -107,7 +107,7 @@ static int command(int fd)
 			{
 				if ( errno == EAGAIN || errno == EWOULDBLOCK )
 					break;
-				fprintf(stderr, "read: unable to send\n");
+				fprintf(stderr, "read: unable to recv\n");
 				return 0;
 			}
 
