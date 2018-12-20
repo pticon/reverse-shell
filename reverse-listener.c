@@ -148,15 +148,18 @@ static const char *get_ip_str(const struct sockaddr *saddr)
 	char		ip[INET6_ADDRSTRLEN];
 	const char	*ptr;
 	socklen_t	len;
+	const char	*fmt;
 
 	switch (saddr->sa_family)
 	{
 		case AF_INET:
 		len = sizeof(struct sockaddr_in);
+		fmt = "%s:%d";
 		break;
 
 		case AF_INET6:
 		len = sizeof(struct sockaddr_in);
+		fmt = "[%s]:%d";
 		break;
 
 		default:
@@ -167,7 +170,7 @@ static const char *get_ip_str(const struct sockaddr *saddr)
 		return "";
 
 	memset(buff, 0, sizeof(buff));
-	snprintf(buff, sizeof(buff), "[%s]:%d", ptr, ntohs(((const struct sockaddr_in *)saddr)->sin_port));
+	snprintf(buff, sizeof(buff), fmt, ptr, ntohs(((const struct sockaddr_in *)saddr)->sin_port));
 
 	return buff;
 }
