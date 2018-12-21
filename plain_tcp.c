@@ -55,6 +55,9 @@ static int plain_tcp_listen(struct addrinfo *hints, const char *host, const char
 static ssize_t plain_tcp_send(int sockfd, const void *buf, size_t len, int flags,
 	const struct sockaddr *destaddr, socklen_t addrlen)
 {
+	(void)destaddr;
+	(void)addrlen;
+
 	return send(sockfd, buf, len, flags);
 }
 
@@ -62,6 +65,9 @@ static ssize_t plain_tcp_send(int sockfd, const void *buf, size_t len, int flags
 static ssize_t plain_tcp_recv(int sockfd, void *buf, size_t len, int flags,
 	struct sockaddr *srcaddr, socklen_t *addrlen)
 {
+	(void)srcaddr;
+	(void)addrlen;
+
 	return recv(sockfd, buf, len, flags);
 }
 

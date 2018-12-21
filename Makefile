@@ -3,7 +3,7 @@ TARGET=reverse-shell reverse-listener
 
 CC:=gcc
 LD:=gcc
-CFLAGS:=-Wall -Wunused -Werror
+CFLAGS:=-Wall -Wextra -Wunused -Werror
 LDFLAGS:=
 
 
