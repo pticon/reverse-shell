@@ -158,7 +158,7 @@ static const char *get_ip_str(const struct sockaddr *saddr)
 		break;
 
 		case AF_INET6:
-		len = sizeof(struct sockaddr_in);
+		len = sizeof(struct sockaddr_in6);
 		fmt = "[%s]:%d";
 		break;
 
