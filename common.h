@@ -1,16 +1,30 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#define VERSION		"1.2.0-dev"
+#define _STR(a)		#a
+#define STR(a)		_STR(a)
+
+#define RSHELL_F_LISTEN	(1 << 0)
+#define RSHELL_F_NOFORK	(1 << 1)
+
+struct plugin;
+
+struct rshell
+{
+	char		*host;
+	char		*service;
+	uint16_t	port;
+	int		family;
+	char		*shell;
+	unsigned	flags;
+	int		backlog;
+	char		*peer;
+	struct plugin	*plugin;
+};
 
 #include <ctype.h>
 
 #define CMD_BUFFER_LEN	4096
-
-static inline void version(void)
-{
-	fprintf(stderr, "%s %s\n", PROGNAME, VERSION);
-}
 
 static inline char *trim(char *str, ssize_t *plen)
 {

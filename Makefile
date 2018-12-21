@@ -1,4 +1,4 @@
-TARGET=reverse-shell reverse-listener
+TARGET=rshell
 
 
 CC:=gcc
@@ -23,28 +23,19 @@ echo-cmd = @echo $(1)
 endif
 
 
-SRCS:=reverse-shell.c
+SRCS:=main.c
+SRCS+=reverse-shell.c
 SRCS+=reverse-listener.c
-
-COMMON_SRCS:=plain_tcp.c
-COMMON_SRCS+=plain_udp.c
-COMMON_SRCS+=popen.c
+SRCS+=plain_tcp.c
+SRCS+=plain_udp.c
+SRCS+=popen.c
 
 OBJS:=$(SRCS:%.c=%.o)
-OBJS+=$(COMMON_SRCS:%.c=%.o)
-
-COMMON_OBJS:=$(COMMON_SRCS:%.c=%.o)
-
 
 all: $(TARGET)
 
 
-reverse-shell: reverse-shell.o $(COMMON_OBJS)
-	$(call echo-cmd, "  LD   $@")
-	$(Q)$(LD) $(LDFLAGS) -o $@ $^
-
-
-reverse-listener: reverse-listener.o $(COMMON_OBJS)
+rshell: $(OBJS)
 	$(call echo-cmd, "  LD   $@")
 	$(Q)$(LD) $(LDFLAGS) -o $@ $^
 
